@@ -64,11 +64,9 @@ func Do[R Request[T], T any, E error](client *resty.Client, req R) (t T, err err
 	if status >= 400 {
 		if strings.HasPrefix(strings.ToLower(res.Header().Get("content-type")), "application/json") {
 			var e E
-			json.Unmarshal(res.Body(), &e)
-			if err != nil {
-				return t, err
+			if err := json.Unmarshal(res.Body(), &e); err == nil {
+				return t, e
 			}
-			return t, e
 		}
 
 		// Return body as error string

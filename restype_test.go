@@ -136,7 +136,7 @@ func TestDo_OK(t *testing.T) {
 	assert.Equal(t, accountResponse, res)
 }
 
-func TestDo_CustomErrorResponse(t *testing.T) {
+func TestDo_JSONErrorResponse(t *testing.T) {
 	var req = AccountRequest{
 		Name:   "account1234",
 		Token:  "token1234",
@@ -174,7 +174,7 @@ func TestDo_CustomErrorResponse(t *testing.T) {
 	assert.Equal(t, customError, err)
 }
 
-func TestDo_CustomErrorResponseNotJSON(t *testing.T) {
+func TestDo_JSONErrorResponse_AsBytes(t *testing.T) {
 	var req = AccountRequest{
 		Name:   "account1234",
 		Token:  "token1234",
@@ -212,6 +212,35 @@ func TestDo_CustomErrorResponseNotJSON(t *testing.T) {
 	want, err := json.Marshal(&customError)
 	assert.NoError(t, err)
 	assert.Equal(t, string(want)+"\n", resErr.Error())
+}
+
+func TestDo_UnstructuredErrorResponse_WithContentTypeJSON(t *testing.T) {
+	var req = AccountRequest{
+		Name:   "account1234",
+		Token:  "token1234",
+		ID:     42,
+		Status: "active",
+	}
+
+	var mux = http.NewServeMux()
+	var handled = false
+	mux.HandleFunc("/api/account/", func(w http.ResponseWriter, _ *http.Request) {
+		handled = true
+
+		w.Header().Add("content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("error: invalid request"))
+	})
+	var srv = http.Server{Addr: ":8080", Handler: mux}
+	go srv.ListenAndServe()
+	defer srv.Shutdown(context.Background())
+
+	var client = resty.New().
+		SetBaseURL("http://localhost:8080")
+
+	_, err := Do[*AccountRequest, AccountResponse, error](client, &req)
+	assert.True(t, handled)
+	assert.Equal(t, "error: invalid request", err.Error())
 }
 
 var _ Request[any] = new(RequestWithNilResponse)
