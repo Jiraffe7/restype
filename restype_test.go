@@ -1,6 +1,7 @@
 package restype
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -94,6 +95,51 @@ type CustomError struct {
 // Error implements error
 func (s CustomError) Error() string {
 	return fmt.Sprintf("CustomError(ID=%d): %s %v", s.ID, s.Message, s.Args)
+}
+
+func TestDoRaw_OK(t *testing.T) {
+	var req = AccountRequest{
+		Name:   "account1234",
+		Token:  "token1234",
+		ID:     42,
+		Status: "active",
+	}
+	var accountResponse = AccountResponse{Users: []User{{1, "A"}, {2, "B"}}}
+
+	var mux = http.NewServeMux()
+	var handled = false
+	mux.HandleFunc("/api/account/", func(w http.ResponseWriter, r *http.Request) {
+		handled = true
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/account/42", r.URL.Path)
+		assert.Equal(t, "active", r.URL.Query().Get("account_status"))
+		assert.Equal(t, "token1234", r.Header.Get("x-account-token"))
+
+		var reqBody AccountRequest
+		err := json.NewDecoder(r.Body).Decode(&reqBody)
+		assert.NoError(t, err)
+		assert.Equal(t, AccountRequest{Name: "account1234"}, reqBody)
+
+		err = json.NewEncoder(w).Encode(&accountResponse)
+		assert.NoError(t, err)
+	})
+	var srv = http.Server{Addr: ":8080", Handler: mux}
+	go srv.ListenAndServe()
+	defer srv.Shutdown(context.Background())
+
+	var client = resty.New().
+		SetBaseURL("http://localhost:8080")
+
+	raw, res, err := DoRaw[*AccountRequest, AccountResponse, CustomError](client, &req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, raw.StatusCode())
+	assert.True(t, handled)
+
+	var accountResponseBytes []byte
+	accountResponseBytes, _ = json.Marshal(&accountResponse) // SAFETY: marshalling a struct
+
+	assert.Equal(t, accountResponse, res)
+	assert.Equal(t, accountResponseBytes, bytes.TrimSpace(raw.Body()))
 }
 
 func TestDo_OK(t *testing.T) {

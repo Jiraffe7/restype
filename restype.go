@@ -27,6 +27,13 @@ type Request[T any] interface {
 // Requests without response should specify the `any` type.
 // Requests without typed error should specify the `error` type.
 func Do[R Request[T], T any, E error](client *resty.Client, req R) (t T, err error) {
+	_, t, err = DoRaw[R, T, E](client, req)
+	return t, err
+}
+
+// DoRaw performs the same function as Do
+// and returns the raw resty.Response.
+func DoRaw[R Request[T], T any, E error](client *resty.Client, req R) (res *resty.Response, t T, err error) {
 	var (
 		method      = req.Method()
 		path        = req.Path()
@@ -36,7 +43,7 @@ func Do[R Request[T], T any, E error](client *resty.Client, req R) (t T, err err
 	)
 	body, err := req.Body()
 	if err != nil {
-		return t, err
+		return res, t, err
 	}
 
 	builder := client.R().
@@ -49,30 +56,31 @@ func Do[R Request[T], T any, E error](client *resty.Client, req R) (t T, err err
 		builder = builder.SetBody(body)
 	}
 
-	res, err := builder.
+	res, err = builder.
 		Execute(method, path)
 	if err != nil {
-		return t, err
+		return res, t, err
 	}
 
 	var status = res.StatusCode()
 
 	if status >= 200 && status < 300 {
-		return req.ResponseFromBytes(res.Body())
+		t, err = req.ResponseFromBytes(res.Body())
+		return res, t, err
 	}
 
 	if status >= 400 {
 		if strings.HasPrefix(strings.ToLower(res.Header().Get("content-type")), "application/json") {
 			var e E
 			if err := json.Unmarshal(res.Body(), &e); err == nil {
-				return t, e
+				return res, t, e
 			}
 		}
 
 		// Return body as error string
 		err = fmt.Errorf("%s", res.Body())
-		return t, err
+		return res, t, err
 	}
 
-	return t, nil
+	return res, t, nil
 }
