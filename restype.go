@@ -62,14 +62,12 @@ func DoRaw[R Request[T], T any, E error](client *resty.Client, req R) (res *rest
 		return res, t, err
 	}
 
-	var status = res.StatusCode()
-
-	if status >= 200 && status < 300 {
+	if res.IsSuccess() {
 		t, err = req.ResponseFromBytes(res.Body())
 		return res, t, err
 	}
 
-	if status >= 400 {
+	if res.IsError() {
 		if strings.HasPrefix(strings.ToLower(res.Header().Get("content-type")), "application/json") {
 			var e E
 			if err := json.Unmarshal(res.Body(), &e); err == nil {
