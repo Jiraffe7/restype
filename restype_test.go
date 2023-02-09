@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/go-resty/resty/v2"
@@ -106,9 +107,8 @@ func TestDoRaw_OK(t *testing.T) {
 	}
 	var accountResponse = AccountResponse{Users: []User{{1, "A"}, {2, "B"}}}
 
-	var mux = http.NewServeMux()
 	var handled = false
-	mux.HandleFunc("/api/account/", func(w http.ResponseWriter, r *http.Request) {
+	var srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handled = true
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/api/account/42", r.URL.Path)
@@ -122,13 +122,11 @@ func TestDoRaw_OK(t *testing.T) {
 
 		err = json.NewEncoder(w).Encode(&accountResponse)
 		assert.NoError(t, err)
-	})
-	var srv = http.Server{Addr: ":8080", Handler: mux}
-	go srv.ListenAndServe()
-	defer srv.Shutdown(context.Background())
+	}))
+	defer srv.Close()
 
 	var client = resty.New().
-		SetBaseURL("http://localhost:8080")
+		SetBaseURL(srv.URL)
 
 	raw, res, err := DoRaw[*AccountRequest, AccountResponse, CustomError](client, &req)
 	assert.NoError(t, err)
@@ -151,9 +149,8 @@ func TestDo_OK(t *testing.T) {
 	}
 	var accountResponse = AccountResponse{Users: []User{{1, "A"}, {2, "B"}}}
 
-	var mux = http.NewServeMux()
 	var handled = false
-	mux.HandleFunc("/api/account/", func(w http.ResponseWriter, r *http.Request) {
+	var srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handled = true
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/api/account/42", r.URL.Path)
@@ -167,13 +164,11 @@ func TestDo_OK(t *testing.T) {
 
 		err = json.NewEncoder(w).Encode(&accountResponse)
 		assert.NoError(t, err)
-	})
-	var srv = http.Server{Addr: ":8080", Handler: mux}
-	go srv.ListenAndServe()
-	defer srv.Shutdown(context.Background())
+	}))
+	defer srv.Close()
 
 	var client = resty.New().
-		SetBaseURL("http://localhost:8080")
+		SetBaseURL(srv.URL)
 
 	res, err := Do[*AccountRequest, AccountResponse, CustomError](client, &req)
 	assert.NoError(t, err)
@@ -198,22 +193,19 @@ func TestDo_JSONErrorResponse(t *testing.T) {
 		},
 	}
 
-	var mux = http.NewServeMux()
 	var handled = false
-	mux.HandleFunc("/api/account/", func(w http.ResponseWriter, _ *http.Request) {
+	var srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		handled = true
 
 		w.Header().Add("content-type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		err := json.NewEncoder(w).Encode(&customError)
 		assert.NoError(t, err)
-	})
-	var srv = http.Server{Addr: ":8080", Handler: mux}
-	go srv.ListenAndServe()
-	defer srv.Shutdown(context.Background())
+	}))
+	defer srv.Close()
 
 	var client = resty.New().
-		SetBaseURL("http://localhost:8080")
+		SetBaseURL(srv.URL)
 
 	_, err := Do[*AccountRequest, AccountResponse, CustomError](client, &req)
 	assert.True(t, handled)
@@ -236,21 +228,18 @@ func TestDo_JSONErrorResponse_AsBytes(t *testing.T) {
 		},
 	}
 
-	var mux = http.NewServeMux()
 	var handled = false
-	mux.HandleFunc("/api/account/", func(w http.ResponseWriter, _ *http.Request) {
+	var srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		handled = true
 
 		w.WriteHeader(http.StatusBadRequest)
 		err := json.NewEncoder(w).Encode(&customError)
 		assert.NoError(t, err)
-	})
-	var srv = http.Server{Addr: ":8080", Handler: mux}
-	go srv.ListenAndServe()
-	defer srv.Shutdown(context.Background())
+	}))
+	defer srv.Close()
 
 	var client = resty.New().
-		SetBaseURL("http://localhost:8080")
+		SetBaseURL(srv.URL)
 
 	_, resErr := Do[*AccountRequest, AccountResponse, error](client, &req)
 	assert.True(t, handled)
@@ -268,21 +257,18 @@ func TestDo_UnstructuredErrorResponse_WithContentTypeJSON(t *testing.T) {
 		Status: "active",
 	}
 
-	var mux = http.NewServeMux()
 	var handled = false
-	mux.HandleFunc("/api/account/", func(w http.ResponseWriter, _ *http.Request) {
+	var srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		handled = true
 
 		w.Header().Add("content-type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("error: invalid request"))
-	})
-	var srv = http.Server{Addr: ":8080", Handler: mux}
-	go srv.ListenAndServe()
-	defer srv.Shutdown(context.Background())
+	}))
+	defer srv.Close()
 
 	var client = resty.New().
-		SetBaseURL("http://localhost:8080")
+		SetBaseURL(srv.URL)
 
 	_, err := Do[*AccountRequest, AccountResponse, error](client, &req)
 	assert.True(t, handled)
@@ -308,18 +294,15 @@ func (*RequestWithNilResponse) Path() string {
 func TestDo_NilResponseType(t *testing.T) {
 	var req = RequestWithNilResponse{}
 
-	var mux = http.NewServeMux()
 	var handled = false
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+	var srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		handled = true
 		w.WriteHeader(http.StatusOK)
-	})
-	var srv = http.Server{Addr: ":8080", Handler: mux}
-	go srv.ListenAndServe()
-	defer srv.Shutdown(context.Background())
+	}))
+	defer srv.Close()
 
 	var client = resty.New().
-		SetBaseURL("http://localhost:8080")
+		SetBaseURL(srv.URL)
 
 	res, err := Do[*RequestWithNilResponse, any, error](client, &req)
 	assert.NoError(t, err)
