@@ -19,6 +19,12 @@ type Request[T any] interface {
 	ResponseFromBytes([]byte) (T, error)
 }
 
+// RequestOptions are functions that modify resty.Request and return a reference to it.
+//
+// Allows for modifying the request where required or
+// where it does not make sense to add to implementations of Request[T].
+type RequestOptions func(*resty.Request) *resty.Request
+
 // Do performs a request using resty.Client with
 // request of type `Request[T]`,
 // response of type `T`,
@@ -26,14 +32,16 @@ type Request[T any] interface {
 //
 // Requests without response should specify the `any` type.
 // Requests without typed error should specify the `error` type.
-func Do[R Request[T], T any, E error](client *resty.Client, req R) (t T, err error) {
-	_, t, err = DoRaw[R, T, E](client, req)
+//
+// RequestOptions enable modification of the request.
+func Do[R Request[T], T any, E error](client *resty.Client, req R, opts ...RequestOptions) (t T, err error) {
+	_, t, err = DoRaw[R, T, E](client, req, opts...)
 	return t, err
 }
 
 // DoRaw performs the same function as Do
 // and returns the raw resty.Response.
-func DoRaw[R Request[T], T any, E error](client *resty.Client, req R) (res *resty.Response, t T, err error) {
+func DoRaw[R Request[T], T any, E error](client *resty.Client, req R, opts ...RequestOptions) (res *resty.Response, t T, err error) {
 	var (
 		method      = req.Method()
 		path        = req.Path()
@@ -50,6 +58,10 @@ func DoRaw[R Request[T], T any, E error](client *resty.Client, req R) (res *rest
 		SetHeaders(headers).
 		SetQueryParams(queryParams).
 		SetPathParams(pathParams)
+
+	for _, opt := range opts {
+		builder = opt(builder)
+	}
 
 	// SetBody does not handle nil
 	if body != nil {

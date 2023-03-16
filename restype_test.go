@@ -107,6 +107,11 @@ func TestDoRaw_OK(t *testing.T) {
 	}
 	var accountResponse = AccountResponse{Users: []User{{1, "A"}, {2, "B"}}}
 
+	var logidOpt = func(r *resty.Request) *resty.Request {
+		r.SetHeader("logid", "logid-asdf")
+		return r
+	}
+
 	var handled = false
 	var srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handled = true
@@ -114,6 +119,8 @@ func TestDoRaw_OK(t *testing.T) {
 		assert.Equal(t, "/api/account/42", r.URL.Path)
 		assert.Equal(t, "active", r.URL.Query().Get("account_status"))
 		assert.Equal(t, "token1234", r.Header.Get("x-account-token"))
+
+		assert.Equal(t, "logid-asdf", r.Header.Get("logid"))
 
 		var reqBody AccountRequest
 		err := json.NewDecoder(r.Body).Decode(&reqBody)
@@ -128,7 +135,7 @@ func TestDoRaw_OK(t *testing.T) {
 	var client = resty.New().
 		SetBaseURL(srv.URL)
 
-	raw, res, err := DoRaw[*AccountRequest, AccountResponse, CustomError](client, &req)
+	raw, res, err := DoRaw[*AccountRequest, AccountResponse, CustomError](client, &req, logidOpt)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, raw.StatusCode())
 	assert.True(t, handled)
@@ -149,6 +156,11 @@ func TestDo_OK(t *testing.T) {
 	}
 	var accountResponse = AccountResponse{Users: []User{{1, "A"}, {2, "B"}}}
 
+	var logidOpt = func(r *resty.Request) *resty.Request {
+		r.SetHeader("logid", "logid-asdf")
+		return r
+	}
+
 	var handled = false
 	var srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handled = true
@@ -156,6 +168,8 @@ func TestDo_OK(t *testing.T) {
 		assert.Equal(t, "/api/account/42", r.URL.Path)
 		assert.Equal(t, "active", r.URL.Query().Get("account_status"))
 		assert.Equal(t, "token1234", r.Header.Get("x-account-token"))
+
+		assert.Equal(t, "logid-asdf", r.Header.Get("logid"))
 
 		var reqBody AccountRequest
 		err := json.NewDecoder(r.Body).Decode(&reqBody)
@@ -170,7 +184,7 @@ func TestDo_OK(t *testing.T) {
 	var client = resty.New().
 		SetBaseURL(srv.URL)
 
-	res, err := Do[*AccountRequest, AccountResponse, CustomError](client, &req)
+	res, err := Do[*AccountRequest, AccountResponse, CustomError](client, &req, logidOpt)
 	assert.NoError(t, err)
 	assert.True(t, handled)
 
