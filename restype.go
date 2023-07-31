@@ -51,7 +51,7 @@ func DoRaw[R Request[T], T any, E error](client *resty.Client, req R, opts ...Re
 	)
 	body, err := req.Body()
 	if err != nil {
-		return res, t, err
+		return res, t, Error{kind: ErrorBodyFromRequest, original: err}
 	}
 
 	builder := client.R().
@@ -71,12 +71,15 @@ func DoRaw[R Request[T], T any, E error](client *resty.Client, req R, opts ...Re
 	res, err = builder.
 		Execute(method, path)
 	if err != nil {
-		return res, t, err
+		return res, t, Error{kind: ErrorExecuteRequest, original: err}
 	}
 
 	if res.IsSuccess() {
 		t, err = req.ResponseFromBytes(res.Body())
-		return res, t, err
+		if err != nil {
+			return res, t, Error{kind: ErrorResponseFromBytes, original: err}
+		}
+		return res, t, nil
 	}
 
 	if res.IsError() {
